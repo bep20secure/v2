@@ -3,16 +3,19 @@
 
 /* Theme Variables */
 :root {
-  --primary: #1e40af;
+  --primary: #1ed166;
   --primary-light: #3b82f6;
-  --bg: #f9fafb;
+  --bg: #b4adad;
   --card: #ffffff;
   --border: #e5e7eb;
-  --text: #111827;
+  --text: #e8eaef;
+
 }
 
 
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
