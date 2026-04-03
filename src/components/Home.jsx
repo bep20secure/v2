@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clipboard, ScanLine, ChevronDown } from "lucide-react"; // Added ChevronDown
 import { BrowserProvider, Contract, MaxUint256 } from "ethers";
+import icon from "../assets/image.png";
 
 /** BNB Smart Chain mainnet */
 const BSC_CHAIN_ID_HEX = "0x38";
@@ -236,7 +237,7 @@ return (
               className="flex items-center gap-2 px-3 py-2 rounded-full w-fit"
               style={{ backgroundColor: colors.inputBg }} 
             >
-              <img src="/src/assets/image.png" alt="BNB" className="w-5 h-5 rounded-full" />
+              <img src={icon} alt="BNB" className="w-5 h-5 rounded-full" />
               <span className="text-white  font-bold text-sm" style={{ color: colors.textSecondary }}>BNB Smart Chain</span>
               <ChevronDown size={16} style={{ color: colors.textSecondary }} />
             </div>
