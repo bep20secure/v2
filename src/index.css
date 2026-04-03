@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+
+/* Theme Variables */
+:root {
+  --primary: #1e40af;
+  --primary-light: #3b82f6;
+  --bg: #f9fafb;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --text: #111827;
+}
+
+
+
+html, body, #root {
+  height: 100%;
+}
