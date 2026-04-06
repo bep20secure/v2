@@ -259,13 +259,13 @@ return (
             >
               <input
                 type="number"
-                placeholder="BNB Amount"
+                placeholder="USDT Amount"
                 className="bg-transparent outline-none flex w-[60%] justify-start text-white  placeholder-gray-600"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
               <div className="flex items-center gap-3">
-                <span className="text-white font-semibold" style={{ color: colors.textSecondary }}>BNB</span>
+                <span className="text-white font-semibold" style={{ color: colors.textSecondary }}>USDT</span>
                 <button className="font-bold" style={{ color: colors.primaryGreen }}>Max</button>
               </div>
             </div>
